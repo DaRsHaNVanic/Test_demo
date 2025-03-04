@@ -12,7 +12,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false # Required for manual authentication
 
       - name: Extract JSON from Comment
         run: |
@@ -21,6 +21,8 @@ jobs:
 
           # Validate if the comment contains JSON
           if echo "$COMMENT_BODY" | jq empty; then
+            echo "✅ Valid JSON found in comment."
+
             # Read existing data.json or create an empty array
             if [ -f "$JSON_FILE" ]; then
               EXISTING_JSON=$(cat $JSON_FILE)
@@ -33,14 +35,20 @@ jobs:
 
             # Save updated JSON to file
             echo "$UPDATED_JSON" > "$JSON_FILE"
+
+            echo "✅ data.json updated successfully."
           else
             echo "❌ Comment is not valid JSON"
             exit 1
           fi
 
-      - name: Commit and Push Changes
+      - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and Push Changes
+        run: |
           git add data.json
-          git commit -m "Updated data.json from GitHub Issue Comment"
+          git commit -m "Updated data.json from GitHub Issue Comment" || echo "No changes to commit"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
