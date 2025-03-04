@@ -1,0 +1,45 @@
+name: Update JSON from Issue Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  update-json:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Extract JSON from Comment
+        run: |
+          COMMENT_BODY="${{ github.event.comment.body }}"
+          JSON_FILE="data.json"
+
+          # Validate if the comment contains JSON
+          if echo "$COMMENT_BODY" | jq empty; then
+            # Read existing data.json or create an empty array
+            if [ -f "$JSON_FILE" ]; then
+              EXISTING_JSON=$(cat $JSON_FILE)
+            else
+              EXISTING_JSON="[]"
+            fi
+
+            # Append new JSON object to array
+            UPDATED_JSON=$(echo "$EXISTING_JSON" | jq --argjson new "$COMMENT_BODY" '. + [$new]')
+
+            # Save updated JSON to file
+            echo "$UPDATED_JSON" > "$JSON_FILE"
+          else
+            echo "❌ Comment is not valid JSON"
+            exit 1
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          git commit -m "Updated data.json from GitHub Issue Comment"
+          git push
