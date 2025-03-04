@@ -11,29 +11,28 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-        with:
-          persist-credentials: false # Required for manual authentication
 
       - name: Extract JSON from Comment
         run: |
-          COMMENT_BODY=$(jq -R -s . <<< "${{ github.event.comment.body }}")
+          COMMENT_BODY='${{ github.event.comment.body }}'
           JSON_FILE="data.json"
 
-          # Validate if the comment contains JSON
-          if echo "$COMMENT_BODY" | jq empty; then
+          # Check if data.json exists, else create an empty JSON array
+          if [ ! -f "$JSON_FILE" ]; then
+            echo "[]" > "$JSON_FILE"
+          fi
+
+          # Validate if the comment contains valid JSON
+          if echo "$COMMENT_BODY" | jq empty 2>/dev/null; then
             echo "✅ Valid JSON found in comment."
 
-            # Read existing data.json or create an empty array
-            if [ -f "$JSON_FILE" ]; then
-              EXISTING_JSON=$(cat $JSON_FILE)
-            else
-              EXISTING_JSON="[]"
-            fi
+            # Read existing JSON file
+            EXISTING_JSON=$(cat $JSON_FILE)
 
-            # Append new JSON object to array
+            # Append new JSON object
             UPDATED_JSON=$(echo "$EXISTING_JSON" | jq --argjson new "$COMMENT_BODY" '. + [$new]')
 
-            # Save updated JSON to file
+            # Write updated JSON to file
             echo "$UPDATED_JSON" > "$JSON_FILE"
 
             echo "✅ data.json updated successfully."
@@ -42,13 +41,12 @@ jobs:
             exit 1
           fi
 
-      - name: Configure Git
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Commit and Push Changes
-        run: |
           git add data.json
           git commit -m "Updated data.json from GitHub Issue Comment" || echo "No changes to commit"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          git push origin main
